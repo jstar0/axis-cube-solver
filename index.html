@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- artifact:head-start -->
+<title>轴方求解台</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Martian+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a workbench. The 3D stage fills the left, a narrow instrument panel
+   sits on the right; on phones the stage sits on top and the panel follows. */
+:root {
+  --bg: #e6e9ed;
+  --stage-a: #f6f7f9;
+  --stage-b: #d9dee5;
+  --panel: #f8f9fb;
+  --ink: #151920;
+  --muted: #5b6471;
+  --line: #d3d8df;
+  --raise: #ffffff;
+  --accent: #3442d6;
+  --accent-soft: #e2e5fb;
+  --on-accent: #ffffff;
+  --ok: #1d8049;
+  --bad: #be2a37;
+  --font-ui: "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+  --font-mono: "Martian Mono", "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  --panel-w: 392px;
+  --r: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1014; --stage-a: #1a1f27; --stage-b: #0b0e12; --panel: #11151a; --ink: #e7ebf0;
+    --muted: #8f99a7; --line: #262d36; --raise: #181d24; --accent: #8e9cff; --accent-soft: #222849;
+    --on-accent: #0d1014; --ok: #4fc585; --bad: #ff6f7b; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1014; --stage-a: #1a1f27; --stage-b: #0b0e12; --panel: #11151a; --ink: #e7ebf0;
+  --muted: #8f99a7; --line: #262d36; --raise: #181d24; --accent: #8e9cff; --accent-soft: #222849;
+  --on-accent: #0d1014; --ok: #4fc585; --bad: #ff6f7b; color-scheme: dark;
+}
+
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 14px/1.55 var(--font-ui); -webkit-font-smoothing: antialiased;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.app { height: 100%; display: grid; grid-template-columns: minmax(0, 1fr) var(--panel-w); }
+
+/* Stage ------------------------------------------------------------------ */
+.stage {
+  position: relative; min-height: 0; overflow: hidden;
+  background: radial-gradient(120% 90% at 40% 35%, var(--stage-a), var(--stage-b));
+}
+.stage canvas { display: block; touch-action: none; cursor: grab; }
+.stage canvas:active { cursor: grabbing; }
+.stage-head {
+  position: absolute; inset: 0 auto auto 0; padding: 20px 24px; pointer-events: none;
+  display: grid; gap: 6px;
+}
+.eyebrow {
+  font: 600 10.5px/1 var(--font-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted);
+}
+.stage-head h1 { margin: 0; font-size: 26px; line-height: 1.15; font-weight: 650; letter-spacing: .02em; text-wrap: balance; }
+.status {
+  justify-self: start; display: inline-flex; align-items: center; gap: 8px; margin-top: 4px;
+  padding: 4px 10px 4px 8px; border-radius: 999px; background: var(--raise); border: 1px solid var(--line);
+  font-size: 12.5px; color: var(--muted);
+}
+.status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.status[data-kind="solved"]::before { background: var(--ok); }
+.status[data-kind="bad"]::before { background: var(--bad); }
+.status[data-kind="scrambled"]::before { background: var(--accent); }
+
+.labels { position: absolute; inset: 0; pointer-events: none; }
+.flabel {
+  position: absolute; left: 0; top: 0; display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 7px 3px 6px; border-radius: 7px; background: color-mix(in srgb, var(--raise) 88%, transparent);
+  border: 1px solid var(--line); font: 600 12px/1 var(--font-mono); transition: opacity .2s;
+  box-shadow: 0 1px 2px rgba(0,0,0,.08);
+}
+.flabel.is-back { opacity: .28; }
+
+.hud {
+  position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 12px; padding: 8px 10px 8px 16px; border-radius: 14px;
+  background: var(--raise); border: 1px solid var(--line); box-shadow: 0 6px 20px rgba(10,15,30,.12);
+  max-width: calc(100% - 32px);
+}
+.hud-move { font: 600 26px/1 var(--font-mono); min-width: 2.2ch; text-align: center; }
+.hud-text { display: grid; font-size: 12.5px; line-height: 1.35; color: var(--muted); min-width: 0; white-space: nowrap; }
+.hud-text b { color: var(--ink); font-weight: 600; }
+.hud .btn { padding: 8px 10px; }
+
+.stage-tools { position: absolute; right: 16px; top: 16px; display: flex; gap: 6px; }
+
+/* Panel ------------------------------------------------------------------ */
+.panel {
+  min-height: 0; overflow-y: auto; background: var(--panel); border-left: 1px solid var(--line);
+  display: flex; flex-direction: column;
+}
+.tabs {
+  position: sticky; top: 0; z-index: 2; display: grid; grid-template-columns: repeat(3, 1fr);
+  background: var(--panel); border-bottom: 1px solid var(--line); padding: 0 8px;
+}
+.tab {
+  appearance: none; border: 0; background: none; padding: 14px 4px 12px; cursor: pointer;
+  color: var(--muted); font-weight: 600; border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+.pane { padding: 18px 20px 28px; display: grid; gap: 22px; align-content: start; }
+.sec { display: grid; gap: 10px; }
+.sec-title { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.sec-title h2 { margin: 0; font-size: 13px; font-weight: 650; letter-spacing: .02em; }
+.sec-title span { font-size: 12px; color: var(--muted); }
+.hint { margin: 0; font-size: 12.5px; color: var(--muted); }
+.hint kbd {
+  font: 600 11px/1 var(--font-mono); padding: 2px 5px; border: 1px solid var(--line); border-bottom-width: 2px;
+  border-radius: 4px; background: var(--raise); color: var(--ink);
+}
+
+.btn {
+  appearance: none; border: 1px solid var(--line); background: var(--raise); border-radius: 8px;
+  padding: 8px 12px; cursor: pointer; font-weight: 550; line-height: 1.2; white-space: nowrap;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  transition: background .15s, border-color .15s;
+}
+.btn:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.btn:disabled { opacity: .45; cursor: default; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.mono { font-family: var(--font-mono); font-weight: 600; font-size: 13px; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; }
+.row > .grow { flex: 1 1 0; }
+
+.seg { display: inline-grid; grid-auto-flow: column; grid-auto-columns: 1fr; border: 1px solid var(--line); border-radius: 9px; padding: 3px; background: var(--raise); }
+.seg button { appearance: none; border: 0; background: none; padding: 7px 10px; border-radius: 6px; cursor: pointer; color: var(--muted); font-weight: 600; font-size: 13px; }
+.seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--ink); }
+
+.chips { display: inline-flex; }
+.chip { width: 11px; height: 11px; border-radius: 3px; border: 1px solid rgba(0,0,0,.22); }
+.chip + .chip { margin-left: -3px; }
+
+/* Face turn table */
+.faces { display: grid; gap: 6px; }
+.face-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) repeat(3, 52px); gap: 6px; align-items: center;
+}
+.face-name { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.face-name .letter { font: 600 15px/1 var(--font-mono); width: 1.4ch; }
+.face-name small { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.history {
+  min-height: 44px; max-height: 120px; overflow-y: auto; padding: 10px 12px; border-radius: var(--r);
+  background: var(--raise); border: 1px solid var(--line); font: 12.5px/1.8 var(--font-mono); color: var(--muted);
+  word-spacing: .35em;
+}
+
+/* Steps list (numbered: it is a real procedure) */
+.steps { margin: 0; padding: 0; list-style: none; counter-reset: s; display: grid; gap: 10px; }
+.steps li { counter-increment: s; display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 8px; font-size: 13px; }
+.steps li::before {
+  content: counter(s); width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--accent-soft); color: var(--ink); font: 600 11px/1 var(--font-mono);
+}
+
+.centers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.center-item { display: flex; align-items: center; gap: 8px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--raise); font-size: 12.5px; }
+.center-item .letter { font: 600 13px/1 var(--font-mono); }
+.center-item small { color: var(--muted); margin-left: auto; }
+
+.verdict { padding: 11px 13px; border-radius: var(--r); border: 1px solid var(--line); background: var(--raise); font-size: 13px; display: grid; gap: 2px; }
+.verdict b { font-weight: 650; }
+.verdict[data-ok="true"] { border-color: color-mix(in srgb, var(--ok) 45%, var(--line)); }
+.verdict[data-ok="true"] b { color: var(--ok); }
+.verdict[data-ok="false"] { border-color: color-mix(in srgb, var(--bad) 45%, var(--line)); }
+.verdict[data-ok="false"] b { color: var(--bad); }
+
+.field { display: grid; gap: 6px; }
+.field label { font-size: 12px; color: var(--muted); }
+.input {
+  width: 100%; box-sizing: border-box; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--raise); font: 12.5px/1.4 var(--font-mono);
+}
+
+/* Solve */
+.now {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 16px; align-items: center;
+  padding: 14px 16px; border-radius: 12px; background: var(--raise); border: 1px solid var(--line);
+}
+.now-move { grid-row: span 2; font: 600 40px/1 var(--font-mono); min-width: 2.4ch; text-align: center; }
+.now-count { font: 600 11px/1.2 var(--font-mono); letter-spacing: .08em; color: var(--muted); text-transform: uppercase; }
+.now-desc { font-size: 13.5px; }
+.transport { display: grid; grid-template-columns: auto auto 1fr auto; gap: 6px; }
+.speed { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+.speed input { flex: 1; accent-color: var(--accent); }
+.stage-block { display: grid; gap: 8px; }
+.stage-block h3 { margin: 0; font-size: 12.5px; font-weight: 600; color: var(--muted); display: flex; justify-content: space-between; }
+.tokens { display: flex; flex-wrap: wrap; gap: 4px; }
+.tok {
+  appearance: none; border: 1px solid var(--line); background: var(--raise); border-radius: 6px; cursor: pointer;
+  font: 600 12.5px/1 var(--font-mono); padding: 6px 7px; min-width: 2.6ch; color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.tok.done { color: var(--muted); background: transparent; }
+.tok.current { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.note { margin: 0; font-size: 12.5px; color: var(--muted); }
+.check { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
+.check input { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; }
+.toast {
+  position: fixed; left: 50%; top: 18px; transform: translateX(-50%); z-index: 10; padding: 9px 14px;
+  border-radius: 10px; background: var(--ink); color: var(--bg); font-size: 13px; box-shadow: 0 8px 24px rgba(0,0,0,.2);
+  max-width: calc(100% - 32px);
+}
+
+@media (max-width: 860px) {
+  html, body { height: auto; }
+  .app { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto; height: auto; }
+  .stage { height: 62vh; min-height: 360px; }
+  .panel { border-left: 0; border-top: 1px solid var(--line); overflow: visible; }
+  .stage-head { padding: 14px 16px; }
+  .stage-head .eyebrow { display: none; }
+  .stage-head h1 { font-size: 20px; }
+  .stage-tools { right: 12px; top: 12px; }
+  .stage-tools .btn { padding: 6px 9px; font-size: 12.5px; }
+  .pane { padding: 16px 16px 32px; }
+  .hud { bottom: 10px; gap: 8px; padding: 6px 8px 6px 12px; }
+  .hud-move { font-size: 20px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+} }
+</script>
+<!-- artifact:head-end -->
+</head>
+<body>
+<!-- artifact:body-start -->
+<div class="app">
+  <section class="stage" id="stage" aria-label="轴方 3D 模型">
+    <div class="labels" id="labels"></div>
+    <header class="stage-head">
+      <span class="eyebrow">Axis Cube · 3×3 机构 · 切面倾斜 60°</span>
+      <h1>轴方求解台</h1>
+      <span class="status" id="status" data-kind="scrambled">示例打乱</span>
+    </header>
+    <div class="stage-tools">
+      <button class="btn" id="btn-view" type="button" title="切换模型的摆放方式">看外形</button>
+      <button class="btn" id="btn-labels" type="button" aria-pressed="true">面标签</button>
+    </div>
+    <div class="hud" id="hud" hidden>
+      <span class="hud-move" id="hud-move">R</span>
+      <span class="hud-text"><b id="hud-title">第 1 / 30 步</b><span id="hud-desc"></span></span>
+      <button class="btn" id="hud-prev" type="button" aria-label="上一步">◀</button>
+      <button class="btn primary" id="hud-next" type="button" aria-label="下一步">▶</button>
+    </div>
+  </section>
+
+  <aside class="panel">
+    <nav class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tab-play" aria-selected="true" data-pane="pane-play" type="button">转动</button>
+      <button class="tab" role="tab" id="tab-edit" aria-selected="false" data-pane="pane-edit" type="button">录入状态</button>
+      <button class="tab" role="tab" id="tab-solve" aria-selected="false" data-pane="pane-solve" type="button">求解演示</button>
+    </nav>
+
+    <!-- Turn -->
+    <div class="pane" id="pane-play" role="tabpanel">
+      <section class="sec">
+        <div class="sec-title"><h2>转动一层</h2><span>以中心块命名</span></div>
+        <div class="faces" id="faces"></div>
+        <p class="hint">键盘 <kbd>U</kbd> <kbd>R</kbd> <kbd>F</kbd> <kbd>D</kbd> <kbd>L</kbd> <kbd>B</kbd> 顺时针，按住 <kbd>Shift</kbd> 逆时针。顺/逆时针都是正对该层中心块看。</p>
+      </section>
+      <section class="sec">
+        <div class="row">
+          <button class="btn grow" id="btn-undo" type="button">撤销</button>
+          <button class="btn grow" id="btn-redo" type="button">重做</button>
+          <button class="btn grow" id="btn-scramble" type="button">随机打乱</button>
+          <button class="btn grow" id="btn-reset" type="button">复原</button>
+        </div>
+        <div class="history" id="history" aria-live="polite"></div>
+      </section>
+      <section class="sec">
+        <div class="sec-title"><h2>切面颜色</h2><span>打乱后露出来的内部面</span></div>
+        <div class="seg" id="inner-seg">
+          <button type="button" data-inner="tint" aria-pressed="true">同块颜色（像实物）</button>
+          <button type="button" data-inner="dark" aria-pressed="false">黑色</button>
+        </div>
+      </section>
+      <section class="sec">
+        <div class="sec-title"><h2>怎么握</h2></div>
+        <p class="hint">轴方的转轴不垂直于外表面。跟着模型做时，按中心块对齐：让实物的 U 中心块朝上、F 中心块朝向你，模型默认就是这个握法。点右上角「看外形」可以把模型摆成复原时的立方体方向。</p>
+      </section>
+    </div>
+
+    <!-- Edit -->
+    <div class="pane" id="pane-edit" role="tabpanel" hidden>
+      <section class="sec">
+        <div class="sec-title"><h2>把实物的样子搬到模型上</h2></div>
+        <ol class="steps">
+          <li><span>认出 6 个中心块（每块由两种颜色的小三角组成，见下表），按模型的方向握住实物。中心块永远不会换位置。</span></li>
+          <li><span>选「换位置」：在模型上先点一块，再点同类的另一块，两块互换。</span></li>
+          <li><span>选「转方向」：点一块让它原地转，直到这一处的形状和颜色和实物一样。</span></li>
+          <li><span>全部对上后，下方会显示「可以求解」。</span></li>
+        </ol>
+      </section>
+      <section class="sec">
+        <div class="seg" id="tool-seg">
+          <button type="button" data-tool="swap" aria-pressed="true">换位置</button>
+          <button type="button" data-tool="twist" aria-pressed="false">转方向</button>
+        </div>
+        <p class="hint" id="edit-hint">先点一块要移动的块。</p>
+      </section>
+      <section class="sec">
+        <div class="sec-title"><h2>中心块对照</h2><span>默认握法下的位置</span></div>
+        <div class="centers" id="centers"></div>
+      </section>
+      <section class="sec">
+        <div class="verdict" id="verdict"></div>
+        <div class="row">
+          <button class="btn grow" id="btn-edit-undo" type="button">撤销一步</button>
+          <button class="btn grow" id="btn-edit-reset" type="button">全部复原</button>
+        </div>
+      </section>
+      <section class="sec">
+        <div class="field">
+          <label for="scramble-input">知道打乱公式？直接输入（从复原状态开始）</label>
+          <div class="row">
+            <input class="input grow" id="scramble-input" placeholder="例如 R U' F2 D L'" autocomplete="off" spellcheck="false">
+            <button class="btn" id="btn-apply-scramble" type="button">应用</button>
+          </div>
+        </div>
+        <div class="field">
+          <label for="code-input">状态码（26 个字母，可复制保存或发给别人）</label>
+          <div class="row">
+            <input class="input grow" id="code-input" autocomplete="off" spellcheck="false">
+            <button class="btn" id="btn-copy-code" type="button">复制</button>
+            <button class="btn" id="btn-load-code" type="button">载入</button>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Solve -->
+    <div class="pane" id="pane-solve" role="tabpanel" hidden>
+      <section class="sec">
+        <button class="btn primary" id="btn-solve" type="button">计算当前状态的解法</button>
+        <p class="note" id="solve-note">先在「录入状态」里把模型调成和实物一样，再来这里计算。</p>
+      </section>
+      <div id="solution" hidden>
+        <section class="sec">
+          <div class="now">
+            <span class="now-move" id="now-move">—</span>
+            <span class="now-count" id="now-count">第 0 / 0 步</span>
+            <span class="now-desc" id="now-desc"></span>
+          </div>
+          <div class="transport">
+            <button class="btn" id="btn-first" type="button" title="回到起点">⏮</button>
+            <button class="btn" id="btn-prev" type="button" title="上一步（←）">◀ 上一步</button>
+            <button class="btn primary" id="btn-next" type="button" title="下一步（→ 或空格）">下一步 ▶</button>
+            <button class="btn" id="btn-play" type="button" title="自动播放">播放</button>
+          </div>
+          <div class="speed">
+            <label for="speed">速度</label>
+            <input type="range" id="speed" min="0" max="4" step="1" value="2">
+            <span id="speed-label">正常</span>
+          </div>
+          <label class="check"><input type="checkbox" id="focus-layer" checked> 只突出要转的那一层（其他块变淡）</label>
+          <p class="hint">每一步先看箭头和高亮的那一层，在实物上转同样的层，再点「下一步」。键盘 <kbd>←</kbd> <kbd>→</kbd> 也可以。</p>
+        </section>
+        <section class="sec" id="stage-list"></section>
+      </div>
+    </div>
+  </aside>
+</div>
+<div class="toast" id="toast" role="status" hidden></div>
+<script type="module" src="src/app.js"></script>
+<!-- artifact:body-end -->
+</body>
+</html>

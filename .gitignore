@@ -1,0 +1,5 @@
+node_modules/
+.DS_Store
+# Local working files (photo reconstruction scratch, editor/agent config)
+tools/
+.claude/

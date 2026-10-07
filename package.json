@@ -1,0 +1,20 @@
+{
+  "name": "axis-cube-solver",
+  "version": "0.1.0",
+  "description": "Interactive 3D model and step-by-step solver for the Axis Cube (a 3x3x3 shape mod with oriented centres)",
+  "license": "MIT",
+  "author": "King Star (https://github.com/jstar0)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jstar0/axis-cube-solver.git"
+  },
+  "homepage": "https://github.com/jstar0/axis-cube-solver",
+  "keywords": ["axis-cube", "rubiks-cube", "twisty-puzzle", "kociemba", "solver", "threejs"],
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "dev": "node scripts/serve.mjs",
+    "test": "node --test tests/"
+  }
+}
